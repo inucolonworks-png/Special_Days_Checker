@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#f5f7fb">
+    <title>イベントカウントダウン</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js" defer></script>
+</head>
+<body>
+    <main class="app">
+        <header class="page-header">
+            <div>
+                <p class="eyebrow">MY SPECIAL DAYS</p>
+                <h1>イベント</h1>
+                <p class="page-description">大切な日までの時間、過ぎてからの時間を記録します。</p>
+            </div>
+            <div class="header-actions">
+                <label class="theme-picker" for="theme-select">
+                    <span class="palette-button" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path d="M12 3a9 9 0 1 0 0 18h1.1a2.1 2.1 0 0 0 1.5-3.6 1.4 1.4 0 0 1 1-2.4H18a3 3 0 0 0 3-3c0-5-4-9-9-9Z"></path>
+                            <circle cx="7.5" cy="12" r="1"></circle>
+                            <circle cx="10" cy="7.5" r="1"></circle>
+                            <circle cx="15" cy="8" r="1"></circle>
+                        </svg>
+                    </span>
+                    <span class="visually-hidden">テーマを選択</span>
+                    <select id="theme-select" aria-label="テーマを選択">
+                        <option value="light">ライト</option>
+                        <option value="dark">ダーク</option>
+                        <option value="cyberpunk">サイバーパンク</option>
+                        <option value="pastel">パステル</option>
+                        <option value="forest">フォレスト</option>
+                        <option value="sunburst">サンバースト</option>
+                        <option value="sunset">サンセット</option>
+                        <option value="lemonade">レモネード</option>
+                        <option value="navy">ネイビー</option>
+                        <option value="skyblue">スカイブルー</option>
+                        <option value="sakura">桜</option>
+                        <option value="midnight">ミッドナイト</option>
+                        <option value="matcha">抹茶</option>
+                        <option value="lavender">ラベンダー</option>
+                        <option value="monochrome">モノトーン</option>
+                    </select>
+                </label>
+                <button class="add-button" id="open-dialog" type="button" aria-label="イベントを追加">+</button>
+            </div>
+        </header>
+
+        <section class="toolbar" aria-label="イベント表示設定">
+            <div class="tabs" role="tablist" aria-label="イベントの絞り込み">
+                <button class="tab is-active" type="button" role="tab" aria-selected="true" data-filter="all">全て</button>
+                <button class="tab" type="button" role="tab" aria-selected="false" data-filter="future">未来日</button>
+                <button class="tab" type="button" role="tab" aria-selected="false" data-filter="past">過去日</button>
+                <button class="tab" type="button" role="tab" aria-selected="false" data-filter="reminding">リマインド中</button>
+            </div>
+            <label class="sort-control" for="sort-select">
+                <span>並び替え</span>
+                <select id="sort-select">
+                    <option value="event-desc">イベント時刻：新しい順</option>
+                    <option value="event-asc">イベント時刻：古い順</option>
+                    <option value="created-desc">追加日：新しい順</option>
+                    <option value="created-asc">追加日：古い順</option>
+                </select>
+            </label>
+        </section>
+
+        <p id="storage-message" class="storage-message" role="status" hidden></p>
+        <p id="action-message" class="action-message" role="status" hidden></p>
+        <section id="event-list" class="event-list" aria-live="polite" aria-label="イベント一覧"></section>
+    </main>
+
+    <dialog id="event-dialog" class="event-dialog" aria-labelledby="dialog-title">
+        <form id="event-form">
+            <div class="dialog-header">
+                <div>
+                    <p class="eyebrow" id="dialog-eyebrow">NEW EVENT</p>
+                    <h2 id="dialog-title">イベントを追加</h2>
+                </div>
+                <button class="icon-button" id="close-dialog" type="button" aria-label="閉じる">×</button>
+            </div>
+
+            <label class="field-label" for="event-name">イベント名</label>
+            <input id="event-name" name="name" type="text" maxlength="100" placeholder="例：誕生日、旅行" required>
+
+            <label class="field-label" for="event-date">日付</label>
+            <input id="event-date" name="date" type="date" required>
+            <label class="check-line time-toggle">
+                <input id="time-enabled" type="checkbox">
+                <span>時間を指定する</span>
+            </label>
+            <div id="time-field" class="time-field" hidden>
+                <label class="field-label" for="event-time">時刻（秒まで指定できます）</label>
+                <input id="event-time" name="time" type="time" step="1" value="00:00:00" disabled>
+            </div>
+
+            <fieldset class="reminder-group">
+                <legend>リマインド設定</legend>
+                <label class="check-line">
+                    <input id="individual-enabled" type="checkbox">
+                    <span>個別指定</span>
+                </label>
+                <div id="individual-settings" class="reminder-settings" hidden>
+                    <p class="hint">イベントから何日経過したらハイライトするか指定します。</p>
+                    <div id="reminder-days" class="reminder-days"></div>
+                    <button class="secondary-button" id="add-reminder-day" type="button">＋ 日数を追加</button>
+                </div>
+
+                <label class="check-line recurring-toggle">
+                    <input id="recurring-enabled" type="checkbox">
+                    <span>定期</span>
+                </label>
+                <div id="recurring-settings" class="reminder-settings recurring-settings" hidden>
+                    <label class="check-line">
+                        <input name="recurring" type="checkbox" value="monthly">
+                        <span>毎月</span>
+                    </label>
+                    <label class="check-line">
+                        <input name="recurring" type="checkbox" value="yearly">
+                        <span>毎年</span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <p id="form-error" class="form-error" role="alert"></p>
+            <div class="dialog-actions">
+                <button class="secondary-button" id="cancel-dialog" type="button">キャンセル</button>
+                <button class="primary-button" id="submit-event" type="submit">追加する</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-title">
+        <div class="dialog-header">
+            <div>
+                <p class="eyebrow">EDIT HISTORY</p>
+                <h2 id="history-title">編集ログ</h2>
+            </div>
+            <button class="icon-button" id="close-history" type="button" aria-label="閉じる">×</button>
+        </div>
+        <p id="history-created" class="history-created"></p>
+        <ol id="history-list" class="history-list"></ol>
+    </dialog>
+</body>
+</html>
