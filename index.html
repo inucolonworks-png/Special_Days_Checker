@@ -68,7 +68,6 @@
         </section>
 
         <p id="storage-message" class="storage-message" role="status" hidden></p>
-        <p id="action-message" class="action-message" role="status" hidden></p>
         <section id="event-list" class="event-list" aria-live="polite" aria-label="イベント一覧"></section>
     </main>
 
@@ -94,6 +93,14 @@
             <div id="time-field" class="time-field" hidden>
                 <label class="field-label" for="event-time">時刻（秒まで指定できます）</label>
                 <input id="event-time" name="time" type="time" step="1" value="00:00:00" disabled>
+            </div>
+
+            <label class="field-label" for="background-image">カードの背景画像</label>
+            <input id="background-image" name="backgroundImage" type="file" accept="image/*">
+            <p class="hint">画像を選択しない場合はデフォルトのデザインになります。</p>
+            <div id="background-image-preview" class="background-image-preview" hidden>
+                <img id="background-image-preview-image" alt="カード背景画像のプレビュー">
+                <button class="secondary-button" id="clear-background-image" type="button">画像を削除</button>
             </div>
 
             <fieldset class="reminder-group">

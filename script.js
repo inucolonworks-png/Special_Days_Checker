@@ -9,6 +9,10 @@ const historyDialog = document.querySelector("#history-dialog");
 const eventForm = document.querySelector("#event-form");
 const nameInput = document.querySelector("#event-name");
 const dateInput = document.querySelector("#event-date");
+const backgroundImageInput = document.querySelector("#background-image");
+const backgroundImagePreview = document.querySelector("#background-image-preview");
+const backgroundImagePreviewImage = document.querySelector("#background-image-preview-image");
+const clearBackgroundImageButton = document.querySelector("#clear-background-image");
 const timeEnabled = document.querySelector("#time-enabled");
 const timeInput = document.querySelector("#event-time");
 const timeField = document.querySelector("#time-field");
@@ -19,7 +23,6 @@ const recurringSettings = document.querySelector("#recurring-settings");
 const reminderDays = document.querySelector("#reminder-days");
 const formError = document.querySelector("#form-error");
 const storageMessage = document.querySelector("#storage-message");
-const actionMessage = document.querySelector("#action-message");
 const sortSelect = document.querySelector("#sort-select");
 const dialogTitle = document.querySelector("#dialog-title");
 const dialogEyebrow = document.querySelector("#dialog-eyebrow");
@@ -30,6 +33,9 @@ const historyList = document.querySelector("#history-list");
 
 let activeFilter = "all";
 let editingEventId = null;
+let backgroundImageData = "";
+let backgroundImageCleared = false;
+let backgroundImageObjectUrl = null;
 let events = loadEvents();
 
 function getSavedTheme() {
@@ -183,155 +189,6 @@ function formatDuration(from, to) {
     return `${years}年${months}ヶ月${days}日 ${hours}時間${minutes}分${seconds}秒`;
 }
 
-function formatShareDays(event, now) {
-    const difference = event.eventAt - now.getTime();
-    if (difference > 0) return `あと${Math.ceil(difference / 86400000)}日`;
-    return `${Math.floor(Math.abs(difference) / 86400000)}日経過`;
-}
-
-function createShareImage(event, now) {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1200;
-    canvas.height = 630;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("画像を作成できませんでした。");
-
-    const styles = getComputedStyle(document.body);
-    const pageColor = styles.getPropertyValue("--page-bg").trim() || "#f5f7fb";
-    const surfaceColor = styles.getPropertyValue("--surface").trim() || "#ffffff";
-    const textColor = styles.getPropertyValue("--text").trim() || "#20283a";
-    const mutedColor = styles.getPropertyValue("--muted").trim() || "#748096";
-    const accentColor = styles.getPropertyValue("--accent").trim() || "#6258e8";
-    const highlightColor = styles.getPropertyValue("--highlight-bg").trim() || "#fffdf5";
-    const borderColor = styles.getPropertyValue("--highlight-border").trim() || accentColor;
-    const isReminder = reminderFor(event, now) !== "";
-
-    context.fillStyle = pageColor;
-    context.fillRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = isReminder ? highlightColor : surfaceColor;
-    context.beginPath();
-    context.roundRect(56, 56, 1088, 518, 34);
-    context.fill();
-    context.strokeStyle = isReminder ? borderColor : accentColor;
-    context.lineWidth = 4;
-    context.stroke();
-
-    context.fillStyle = accentColor;
-    context.beginPath();
-    context.roundRect(56, 56, 18, 518, 9);
-    context.fill();
-
-    const nameFont = '700 58px "Noto Sans JP", "Yu Gothic", sans-serif';
-    context.font = nameFont;
-    context.fillStyle = textColor;
-    const maxWidth = 940;
-    const lines = [];
-    let line = "";
-    for (const character of event.name) {
-        const candidate = line + character;
-        if (line && context.measureText(candidate).width > maxWidth) {
-            lines.push(line);
-            line = character;
-            if (lines.length === 2) break;
-        } else {
-            line = candidate;
-        }
-    }
-    if (line && lines.length < 2) lines.push(line);
-    if (lines.length === 2 && context.measureText(lines[1]).width > maxWidth) {
-        while (lines[1] && context.measureText(`${lines[1]}…`).width > maxWidth) {
-            lines[1] = lines[1].slice(0, -1);
-        }
-        lines[1] += "…";
-    }
-    const nameStartY = lines.length > 1 ? 250 : 285;
-    context.textBaseline = "middle";
-    lines.forEach((nameLine, index) => {
-        context.fillText(nameLine, 120, nameStartY + index * 76);
-    });
-
-    context.font = '600 42px "Noto Sans JP", "Yu Gothic", sans-serif';
-    context.fillStyle = isReminder ? borderColor : mutedColor;
-    context.fillText(formatShareDays(event, now), 120, lines.length > 1 ? 430 : 390);
-
-    return canvas.toDataURL("image/jpeg", 0.92);
-}
-
-function imageDataToFile(dataUrl, fileName) {
-    const [header, encodedData] = dataUrl.split(",");
-    const mimeType = header.match(/data:(.*?);base64/)?.[1] || "image/jpeg";
-    const binary = atob(encodedData);
-    const bytes = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) {
-        bytes[index] = binary.charCodeAt(index);
-    }
-    return new File([bytes], fileName, { type: mimeType });
-}
-
-function createShareFile(event, now) {
-    const fileName = `my-special-days-${event.id.replace(/[^a-zA-Z0-9_-]/g, "") || "event"}.jpg`;
-    return imageDataToFile(createShareImage(event, now), fileName);
-}
-
-function downloadShareFile(file) {
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.name;
-    document.body.append(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    return file;
-}
-
-function downloadShareImage(event, now) {
-    return downloadShareFile(createShareFile(event, now));
-}
-
-function createPostText(event) {
-    const hashtag = event.name.replace(/[\s#]+/gu, "");
-    return hashtag ? `#MySpecialDays #${hashtag}` : "#MySpecialDays";
-}
-
-function showActionMessage(message) {
-    actionMessage.textContent = message;
-    actionMessage.hidden = false;
-}
-
-function searchEvent(event) {
-    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(event.name)}`;
-    window.open(searchUrl, "_blank", "noopener,noreferrer");
-}
-
-async function shareEvent(event) {
-    try {
-        const file = createShareFile(event, new Date());
-        const text = createPostText(event);
-        if (navigator.canShare && navigator.share && navigator.canShare({ files: [file] })) {
-            await navigator.share({ files: [file], text });
-            return;
-        }
-
-        const intentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-        window.open(intentUrl, "_blank", "noopener,noreferrer");
-        downloadShareFile(file);
-        showActionMessage("JPEGをダウンロードしました。Xの投稿画面で画像を添付してください。");
-    } catch (error) {
-        if (error.name === "AbortError") return;
-        showActionMessage(`X共有の準備に失敗しました: ${error.message}`);
-    }
-}
-
-function saveEventImage(event) {
-    try {
-        downloadShareImage(event, new Date());
-        showActionMessage("イベント画像をJPEGで保存しました。");
-    } catch (error) {
-        showActionMessage(`JPEGを保存できませんでした: ${error.message}`);
-    }
-}
-
 function reminderFor(event, now) {
     if (event.eventAt > now.getTime()) return "";
 
@@ -357,12 +214,21 @@ function reminderFor(event, now) {
     return "";
 }
 
+function isValidBackgroundImage(value) {
+    return typeof value === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
+}
+
 function createCard(event, now) {
     const isFuture = event.eventAt > now.getTime();
     const eventDate = new Date(event.eventAt);
     const reminder = reminderFor(event, now);
     const card = document.createElement("article");
     card.className = `event-card${reminder ? " is-reminder" : ""}`;
+    if (isValidBackgroundImage(event.backgroundImage)) {
+        const overlay = reminder ? "var(--highlight-bg)" : "var(--surface)";
+        card.classList.add("has-background-image");
+        card.style.backgroundImage = `linear-gradient(color-mix(in srgb, ${overlay} 78%, transparent), color-mix(in srgb, ${overlay} 78%, transparent)), url("${event.backgroundImage}")`;
+    }
 
     const topLine = document.createElement("div");
     topLine.className = "card-topline";
@@ -416,19 +282,7 @@ function createCard(event, now) {
     const added = document.createElement("p");
     added.className = "added-date";
     added.textContent = `追加日：${formatDateTime(new Date(event.createdAt))}`;
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-    const shareActions = document.createElement("div");
-    shareActions.className = "share-actions";
-    const googleButton = createIconButton("card-action share-action google-action", `「${event.name}」をGoogleで検索`, "google");
-    googleButton.addEventListener("click", () => searchEvent(event));
-    const xButton = createIconButton("card-action share-action x-action", `「${event.name}」をXで共有`, "x");
-    xButton.addEventListener("click", () => shareEvent(event));
-    const saveButton = createIconButton("card-action share-action save-action", `「${event.name}」の画像を保存`, "save");
-    saveButton.addEventListener("click", () => saveEventImage(event));
-    shareActions.append(googleButton, xButton, saveButton);
-    footer.append(added, shareActions);
-    card.append(footer);
+    card.append(added);
     return card;
 }
 
@@ -441,30 +295,13 @@ function createIconButton(className, label, icon) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("aria-hidden", "true");
-    if (icon === "google") {
-        const letter = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        letter.setAttribute("x", "3");
-        letter.setAttribute("y", "20");
-        letter.setAttribute("font-size", "22");
-        letter.setAttribute("font-family", "Arial, sans-serif");
-        letter.setAttribute("font-weight", "700");
-        letter.textContent = "G";
-        svg.append(letter);
-    } else if (icon === "x") {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("d", "M18.9 2h3.1l-6.8 7.8 8 12.2H17l-4.9-7.5-6.5 7.5h-3l7.2-8.3L2.2 2h6.4l4.4 6.9ZM17 19.8h1.7L7.8 4H6Z");
-        svg.append(path);
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    if (icon === "edit") {
+        path.setAttribute("d", "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z");
     } else {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        if (icon === "edit") {
-            path.setAttribute("d", "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z");
-        } else if (icon === "save") {
-            path.setAttribute("d", "M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8");
-        } else {
-            path.setAttribute("d", "M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v6m4-6v6");
-        }
-        svg.append(path);
+        path.setAttribute("d", "M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v6m4-6v6");
     }
+    svg.append(path);
     button.append(svg);
     return button;
 }
@@ -476,6 +313,8 @@ function openEditDialog(event) {
     dialogTitle.textContent = "イベントを編集";
     submitEventButton.textContent = "変更を保存";
     nameInput.value = event.name;
+    backgroundImageData = isValidBackgroundImage(event.backgroundImage) ? event.backgroundImage : "";
+    updateBackgroundImagePreview(backgroundImageData);
 
     const eventDate = new Date(event.eventAt);
     dateInput.value = `${eventDate.getFullYear()}-${pad(eventDate.getMonth() + 1)}-${pad(eventDate.getDate())}`;
@@ -599,9 +438,54 @@ function addReminderDay(value = "") {
     reminderDays.append(row);
 }
 
+function updateBackgroundImagePreview(source) {
+    backgroundImagePreview.hidden = !source;
+    if (source) backgroundImagePreviewImage.src = source;
+    else backgroundImagePreviewImage.removeAttribute("src");
+}
+
+function revokeBackgroundImageObjectUrl() {
+    if (!backgroundImageObjectUrl) return;
+    URL.revokeObjectURL(backgroundImageObjectUrl);
+    backgroundImageObjectUrl = null;
+}
+
+async function readBackgroundImage(file) {
+    if (!file.type.startsWith("image/")) throw new Error("画像ファイルを選択してください。");
+    if (file.size > 10 * 1024 * 1024) throw new Error("画像は10MB以下のファイルを選択してください。");
+
+    const source = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.addEventListener("load", () => resolve(reader.result));
+        reader.addEventListener("error", () => reject(new Error("画像ファイルを読み込めませんでした。")));
+        reader.readAsDataURL(file);
+    });
+    const image = new Image();
+    await new Promise((resolve, reject) => {
+        image.addEventListener("load", resolve, { once: true });
+        image.addEventListener("error", () => reject(new Error("画像ファイルを開けませんでした。")), { once: true });
+        image.src = source;
+    });
+
+    const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("画像を処理できませんでした。");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.85);
+}
+
 function resetForm() {
     eventForm.reset();
     editingEventId = null;
+    backgroundImageData = "";
+    backgroundImageCleared = false;
+    revokeBackgroundImageObjectUrl();
+    updateBackgroundImagePreview("");
     dialogEyebrow.textContent = "NEW EVENT";
     dialogTitle.textContent = "イベントを追加";
     submitEventButton.textContent = "追加する";
@@ -626,6 +510,26 @@ document.querySelector("#cancel-dialog").addEventListener("click", () => eventDi
 document.querySelector("#close-history").addEventListener("click", () => historyDialog.close());
 document.querySelector("#add-reminder-day").addEventListener("click", () => addReminderDay());
 
+backgroundImageInput.addEventListener("change", () => {
+    const file = backgroundImageInput.files[0];
+    backgroundImageCleared = false;
+    revokeBackgroundImageObjectUrl();
+    if (!file) {
+        updateBackgroundImagePreview(backgroundImageData);
+        return;
+    }
+    backgroundImageObjectUrl = URL.createObjectURL(file);
+    updateBackgroundImagePreview(backgroundImageObjectUrl);
+});
+
+clearBackgroundImageButton.addEventListener("click", () => {
+    backgroundImageInput.value = "";
+    backgroundImageData = "";
+    backgroundImageCleared = true;
+    revokeBackgroundImageObjectUrl();
+    updateBackgroundImagePreview("");
+});
+
 timeEnabled.addEventListener("change", () => {
     timeField.hidden = !timeEnabled.checked;
     timeInput.disabled = !timeEnabled.checked;
@@ -640,7 +544,7 @@ recurringEnabled.addEventListener("change", () => {
     recurringSettings.hidden = !recurringEnabled.checked;
 });
 
-eventForm.addEventListener("submit", (event) => {
+eventForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     formError.textContent = "";
 
@@ -695,6 +599,20 @@ eventForm.addEventListener("submit", (event) => {
         return;
     }
 
+    let selectedBackgroundImage = backgroundImageCleared ? "" : backgroundImageData;
+    const backgroundImageFile = backgroundImageInput.files[0];
+    if (backgroundImageFile) {
+        submitEventButton.disabled = true;
+        try {
+            selectedBackgroundImage = await readBackgroundImage(backgroundImageFile);
+        } catch (error) {
+            formError.textContent = `背景画像を読み込めませんでした: ${error.message}`;
+            return;
+        } finally {
+            submitEventButton.disabled = false;
+        }
+    }
+
     const eventAt = eventDate.getTime();
     const now = Date.now();
     if (editingEventId) {
@@ -710,6 +628,16 @@ eventForm.addEventListener("submit", (event) => {
         }
         if (existing.eventAt !== eventAt) {
             changes.push({ label: "イベント日時", before: formatHistoryValue("eventAt", existing.eventAt), after: formatHistoryValue("eventAt", eventAt) });
+        }
+        const oldBackgroundImage = isValidBackgroundImage(existing.backgroundImage) ? existing.backgroundImage : "";
+        if (oldBackgroundImage !== selectedBackgroundImage) {
+            const before = oldBackgroundImage ? "設定あり" : "設定なし";
+            const after = oldBackgroundImage && selectedBackgroundImage
+                ? "別の画像に変更"
+                : selectedBackgroundImage
+                    ? "設定あり"
+                    : "設定なし";
+            changes.push({ label: "背景画像", before, after });
         }
         const oldDays = Array.isArray(existing.reminderDays) ? existing.reminderDays : [];
         if (JSON.stringify(oldDays) !== JSON.stringify(reminderDayValues)) {
@@ -727,6 +655,7 @@ eventForm.addEventListener("submit", (event) => {
         }
         existing.name = name;
         existing.eventAt = eventAt;
+        existing.backgroundImage = selectedBackgroundImage;
         existing.hasTime = timeEnabled.checked;
         existing.reminderDays = reminderDayValues;
         existing.recurring = recurringValues;
@@ -737,7 +666,8 @@ eventForm.addEventListener("submit", (event) => {
                 : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
             name,
             eventAt,
-            hasTime: timeEnabled.checked,
+                backgroundImage: selectedBackgroundImage,
+                hasTime: timeEnabled.checked,
             createdAt: now,
             reminderDays: reminderDayValues,
             recurring: recurringValues,

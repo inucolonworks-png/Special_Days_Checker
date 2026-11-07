@@ -497,6 +497,11 @@ input:focus,
     box-shadow: 0 5px 18px var(--highlight-shadow);
 }
 
+.event-card.has-background-image {
+    background-position: center;
+    background-size: cover;
+}
+
 .card-topline {
     display: flex;
     align-items: flex-start;
@@ -614,61 +619,6 @@ input:focus,
     margin: 15px 0 0;
     color: var(--muted);
     font-size: 0.73rem;
-}
-
-.card-footer {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 15px;
-}
-
-.card-footer .added-date {
-    margin: 0;
-}
-
-.share-actions {
-    display: flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 3px;
-}
-
-.share-action {
-    width: 34px;
-    height: 34px;
-    color: var(--muted);
-}
-
-.share-action svg {
-    width: 19px;
-    height: 19px;
-    fill: none;
-    stroke: currentColor;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    stroke-width: 1.8;
-}
-
-.share-action.google-action svg {
-    fill: #4285f4;
-    stroke: none;
-}
-
-.share-action.x-action svg {
-    fill: currentColor;
-    stroke: none;
-}
-
-.share-action:hover {
-    color: var(--accent);
-}
-
-.action-message {
-    margin: 0 0 14px;
-    color: var(--accent);
-    font-size: 0.88rem;
 }
 
 .empty-state {
@@ -795,8 +745,33 @@ input:focus,
 
 #event-name,
 #event-date,
-#event-time {
+#event-time,
+#background-image {
     width: 100%;
+}
+
+#background-image {
+    color: var(--muted);
+    font-size: 0.84rem;
+}
+
+.background-image-preview {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.background-image-preview[hidden] {
+    display: none;
+}
+
+.background-image-preview img {
+    width: 112px;
+    height: 72px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    object-fit: cover;
 }
 
 .check-line {
