@@ -224,6 +224,16 @@ function reminderFor(event, now) {
     return "";
 }
 
+function nextIndividualReminderAt(event, now) {
+    const reminderDays = Array.isArray(event.reminderDays) ? event.reminderDays : [];
+    const upcoming = reminderDays
+        .filter((days) => Number.isInteger(days) && days >= 0)
+        .map((days) => ({ days, at: event.eventAt + days * 86400000 }))
+        .filter((reminder) => reminder.at > now.getTime())
+        .sort((a, b) => a.at - b.at);
+    return upcoming[0] || null;
+}
+
 function isValidBackgroundImage(value) {
     return typeof value === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
 }
@@ -426,6 +436,17 @@ function createCard(event, now) {
         ? formatDuration(now, eventDate)
         : formatDuration(eventDate, now);
     card.append(topLine, label, timer);
+
+    const nextReminder = nextIndividualReminderAt(event, now);
+    if (nextReminder) {
+        const reminderCountdownLabel = document.createElement("p");
+        reminderCountdownLabel.className = "timer-label reminder-countdown-label";
+        reminderCountdownLabel.textContent = `次の個別リマインド：イベントから${nextReminder.days}日後`;
+        const reminderCountdown = document.createElement("p");
+        reminderCountdown.className = "timer reminder-countdown";
+        reminderCountdown.textContent = formatDuration(now, new Date(nextReminder.at));
+        card.append(reminderCountdownLabel, reminderCountdown);
+    }
 
     if (reminder) {
         const badge = document.createElement("span");
