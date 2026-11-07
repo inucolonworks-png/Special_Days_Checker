@@ -112,6 +112,15 @@ function formatDateTime(date) {
     return `${datePart} ${timePart}`;
 }
 
+function formatEventDate(event) {
+    const date = new Date(event.eventAt);
+    const hasTime = typeof event.hasTime === "boolean"
+        ? event.hasTime
+        : date.getHours() !== 0 || date.getMinutes() !== 0 || date.getSeconds() !== 0;
+    if (hasTime) return formatDateTime(date);
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
 function formatHistoryValue(field, value) {
     if (field === "eventAt") return formatDateTime(new Date(value));
     if (field === "reminderDays") {
@@ -321,7 +330,7 @@ async function createEventCardImage(event, now) {
 
     context.font = '600 34px "Noto Sans JP", "Yu Gothic", sans-serif';
     context.fillStyle = isReminder ? borderColor : mutedColor;
-    context.fillText(formatDateTime(new Date(event.eventAt)), 120, 450);
+    context.fillText(formatEventDate(event), 120, 450);
 
     return new Promise((resolve, reject) => {
         canvas.toBlob((blob) => {
@@ -384,7 +393,7 @@ function createCard(event, now) {
     title.textContent = event.name;
     const date = document.createElement("p");
     date.className = "event-date";
-    date.textContent = formatDateTime(eventDate);
+    date.textContent = formatEventDate(event);
     titleArea.append(title, date);
 
     const actions = document.createElement("div");
