@@ -23,6 +23,7 @@ const recurringSettings = document.querySelector("#recurring-settings");
 const reminderDays = document.querySelector("#reminder-days");
 const formError = document.querySelector("#form-error");
 const storageMessage = document.querySelector("#storage-message");
+const actionMessage = document.querySelector("#action-message");
 const sortSelect = document.querySelector("#sort-select");
 const dialogTitle = document.querySelector("#dialog-title");
 const dialogEyebrow = document.querySelector("#dialog-eyebrow");
@@ -218,6 +219,151 @@ function isValidBackgroundImage(value) {
     return typeof value === "string" && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
 }
 
+function drawCoverImage(context, image, x, y, width, height) {
+    const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+    const sourceWidth = width / scale;
+    const sourceHeight = height / scale;
+    const sourceX = (image.naturalWidth - sourceWidth) / 2;
+    const sourceY = (image.naturalHeight - sourceHeight) / 2;
+    context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, x, y, width, height);
+}
+
+function loadImage(source) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.addEventListener("load", () => resolve(image), { once: true });
+        image.addEventListener("error", () => reject(new Error("背景画像を読み込めませんでした。")), { once: true });
+        image.src = source;
+    });
+}
+
+async function createEventCardImage(event, now) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1200;
+    canvas.height = 630;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("カード画像を作成できませんでした。");
+
+    const styles = getComputedStyle(document.body);
+    const pageColor = styles.getPropertyValue("--page-bg").trim() || "#f5f7fb";
+    const surfaceColor = styles.getPropertyValue("--surface").trim() || "#ffffff";
+    const textColor = styles.getPropertyValue("--text").trim() || "#20283a";
+    const mutedColor = styles.getPropertyValue("--muted").trim() || "#748096";
+    const accentColor = styles.getPropertyValue("--accent").trim() || "#6258e8";
+    const highlightColor = styles.getPropertyValue("--highlight-bg").trim() || "#fffdf5";
+    const borderColor = styles.getPropertyValue("--highlight-border").trim() || accentColor;
+    const isReminder = reminderFor(event, now) !== "";
+    const surface = isReminder ? highlightColor : surfaceColor;
+    const card = { x: 56, y: 56, width: 1088, height: 518, radius: 34 };
+
+    context.fillStyle = pageColor;
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillStyle = surface;
+    context.beginPath();
+    context.roundRect(card.x, card.y, card.width, card.height, card.radius);
+    context.fill();
+
+    if (isValidBackgroundImage(event.backgroundImage)) {
+        const image = await loadImage(event.backgroundImage);
+        context.save();
+        context.beginPath();
+        context.roundRect(card.x, card.y, card.width, card.height, card.radius);
+        context.clip();
+        drawCoverImage(context, image, card.x, card.y, card.width, card.height);
+        context.globalAlpha = 0.78;
+        context.fillStyle = surface;
+        context.fillRect(card.x, card.y, card.width, card.height);
+        context.restore();
+    }
+
+    context.strokeStyle = isReminder ? borderColor : accentColor;
+    context.lineWidth = 4;
+    context.beginPath();
+    context.roundRect(card.x, card.y, card.width, card.height, card.radius);
+    context.stroke();
+    context.fillStyle = accentColor;
+    context.beginPath();
+    context.roundRect(card.x, card.y, 18, card.height, 9);
+    context.fill();
+
+    context.fillStyle = accentColor;
+    context.font = '800 20px "Noto Sans JP", "Yu Gothic", sans-serif';
+    context.textBaseline = "middle";
+    context.fillText("MY SPECIAL DAYS", 120, 142);
+
+    const nameFont = '700 58px "Noto Sans JP", "Yu Gothic", sans-serif';
+    context.font = nameFont;
+    context.fillStyle = textColor;
+    const maxWidth = 960;
+    const lines = [];
+    let line = "";
+    for (const character of event.name) {
+        const candidate = line + character;
+        if (line && context.measureText(candidate).width > maxWidth) {
+            lines.push(line);
+            line = character;
+            if (lines.length === 2) break;
+        } else {
+            line = candidate;
+        }
+    }
+    if (line && lines.length < 2) lines.push(line);
+    if (lines.length === 2 && context.measureText(lines[1]).width > maxWidth) {
+        while (lines[1] && context.measureText(`${lines[1]}…`).width > maxWidth) {
+            lines[1] = lines[1].slice(0, -1);
+        }
+        lines[1] += "…";
+    }
+    const nameStartY = lines.length > 1 ? 270 : 300;
+    lines.forEach((nameLine, index) => {
+        context.fillText(nameLine, 120, nameStartY + index * 76);
+    });
+
+    context.font = '600 34px "Noto Sans JP", "Yu Gothic", sans-serif';
+    context.fillStyle = isReminder ? borderColor : mutedColor;
+    context.fillText(formatDateTime(new Date(event.eventAt)), 120, 450);
+
+    return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => {
+            if (!blob) {
+                reject(new Error("カード画像を保存できませんでした。"));
+                return;
+            }
+            resolve(blob);
+        }, "image/jpeg", 0.92);
+    });
+}
+
+function showActionMessage(message) {
+    actionMessage.textContent = message;
+    actionMessage.hidden = false;
+}
+
+function searchEvent(event) {
+    const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(event.name)}`;
+    window.open(searchUrl, "_blank", "noopener,noreferrer");
+}
+
+async function saveEventCardImage(event, button) {
+    button.disabled = true;
+    try {
+        const blob = await createEventCardImage(event, new Date());
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `special-day-${event.id.replace(/[^a-zA-Z0-9_-]/g, "") || "event"}.jpg`;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        showActionMessage("イベントカードをJPEG画像で保存しました。");
+    } catch (error) {
+        showActionMessage(`カード画像を保存できませんでした: ${error.message}`);
+    } finally {
+        button.disabled = false;
+    }
+}
+
 function createCard(event, now) {
     const isFuture = event.eventAt > now.getTime();
     const eventDate = new Date(event.eventAt);
@@ -282,7 +428,17 @@ function createCard(event, now) {
     const added = document.createElement("p");
     added.className = "added-date";
     added.textContent = `追加日：${formatDateTime(new Date(event.createdAt))}`;
-    card.append(added);
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const cardActions = document.createElement("div");
+    cardActions.className = "card-export-actions";
+    const googleButton = createIconButton("card-action export-action google-action", `「${event.name}」をGoogleで検索`, "google");
+    googleButton.addEventListener("click", () => searchEvent(event));
+    const saveButton = createIconButton("card-action export-action", `「${event.name}」のカード画像を保存`, "save");
+    saveButton.addEventListener("click", () => saveEventCardImage(event, saveButton));
+    cardActions.append(googleButton, saveButton);
+    footer.append(added, cardActions);
+    card.append(footer);
     return card;
 }
 
@@ -291,13 +447,31 @@ function createIconButton(className, label, icon) {
     button.className = className;
     button.type = "button";
     button.setAttribute("aria-label", label);
-    button.title = icon === "edit" ? "編集" : "削除";
+    button.title = {
+        edit: "編集",
+        google: "Googleで検索",
+        save: "カード画像を保存"
+    }[icon] || "削除";
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("aria-hidden", "true");
+    if (icon === "google") {
+        const letter = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        letter.setAttribute("x", "3");
+        letter.setAttribute("y", "20");
+        letter.setAttribute("font-size", "22");
+        letter.setAttribute("font-family", "Arial, sans-serif");
+        letter.setAttribute("font-weight", "700");
+        letter.textContent = "G";
+        svg.append(letter);
+        button.append(svg);
+        return button;
+    }
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     if (icon === "edit") {
         path.setAttribute("d", "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z");
+    } else if (icon === "save") {
+        path.setAttribute("d", "M5 3h12l4 4v14H3V3h2Zm2 0v6h10V3M7 21v-8h10v8");
     } else {
         path.setAttribute("d", "M3 6h18M8 6V4h8v2m3 0-1 14H6L5 6m5 4v6m4-6v6");
     }
